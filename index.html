@@ -83,7 +83,7 @@
       </div>
     </div>
     <div class="footer-bottom">
-      <span>اطلس جامع مسائل انرژی ایران ساخته شده در 1405</span>
+      <span>اطلس جامع مسائل انرژی ایران · نسخه تعاملی ۱٫۰</span>
       <span>جست‌وجوی سریع: Ctrl+K · تغییر تم و پالت از نوار بالا</span>
     </div>
   </div>
@@ -965,8 +965,8 @@ function renderHome() {
 
     '<section class="block wheel-section" id="wheelSec">' +
       '<div class="sec-head">' +
-        '<div class="sec-title"><span class="sec-kicker">ناوبری شعاعی</span><h2>چرخ اطلس</h2></div>' +
-        '<p class="sec-sub">روی هر قطاع بروید تا کانون تمرکز لایه را ببینید؛ با کلیک، وارد محورهای همان لایه شوید.</p>' +
+        '<div class="sec-title"><span class="sec-kicker">ناوبری شعاعی موزون</span><h2>چرخ اطلس</h2></div>' +
+        '<p class="sec-sub">گستره هر قطاع و اندازه حباب اقماری هر لایه با شمار زیرمحورهای آن متناسب است — لایه‌های پرزیرمحور، قطاع پهن‌تر و حباب بزرگ‌تری دارند. روی قطاع یا حباب بروید و برای ورود به محورهای لایه کلیک کنید.</p>' +
       '</div>' +
       '<div class="wheel-layout">' +
         '<div class="wheel-stage"><div class="wheel-glow"></div>' + buildWheelSvg() + '</div>' +
@@ -1028,7 +1028,7 @@ function layerCard(L) {
   '</button>';
 }
 
-/* ---------- چرخ اطلس (SVG) ---------- */
+/* ---------- چرخ اطلس (SVG) — ناوبری شعاعی موزون ---------- */
 function polar(cx, cy, r, deg) {
   const rad = (deg - 90) * Math.PI / 180;
   return [cx + r * Math.cos(rad), cy + r * Math.sin(rad)];
@@ -1052,28 +1052,65 @@ function splitName(s) {
   return [l1, l2];
 }
 
-function buildWheelSvg() {
-  const cx = 210, cy = 210, r1 = 114, r2 = 190, step = 30, gap = 1.7;
-  let segs = '', nums = '';
-  for (let i = 0; i < 12; i++) {
-    const a0 = i * step + gap / 2, a1 = (i + 1) * step - gap / 2;
-    const mid = polar(cx, cy, (r1 + r2) / 2, i * step + step / 2);
-    segs += '<path class="wheel-seg" data-l="' + i + '" d="' + annSector(cx, cy, r1, r2, a0, a1) +
-      '" style="fill:' + lcolor(i) + '" role="button" tabindex="0" aria-label="لایه ' + fa(i + 1) + ': ' + esc(LAYERS[i].t) + '"><title>لایه ' + fa(i + 1) + ' — ' + esc(LSHORT[i]) + '</title></path>';
-    nums += '<text class="wheel-num" x="' + mid[0].toFixed(1) + '" y="' + mid[1].toFixed(1) + '">' + fa(i + 1) + '</text>';
+/* زاویه هر قطاع متناسب با شمار زیرمحور همان لایه (مجموع دقیقاً ۳۶۰ درجه) */
+function wheelAngles() {
+  const GAP = 1.2, MIN_DEG = 13;
+  const avail = 360 - LAYERS.length * GAP;
+  let ang = LAYERS.map(function (L) { return avail * L.nSubs / T_SUBS; });
+  for (let pass = 0; pass < 4; pass++) { /* کف خوانایی برای قطاع‌های کم‌زیرمحور */
+    let deficit = 0, surplus = 0;
+    ang.forEach(function (a) { if (a < MIN_DEG) deficit += MIN_DEG - a; else surplus += a - MIN_DEG; });
+    if (deficit < 0.01 || surplus < 0.01) break;
+    ang = ang.map(function (a) {
+      return a < MIN_DEG ? MIN_DEG : a - (a - MIN_DEG) * Math.min(1, deficit / surplus);
+    });
   }
-  return '<svg id="wheelSvg" viewBox="0 0 420 420" role="img" aria-label="چرخ ناوبری ۱۲ لایه اطلس انرژی">' +
+  return ang;
+}
+/* شعاع حباب اقماری هر لایه — مساحت حباب تقریباً متناسب با شمار زیرمحورها */
+function bubRadius(n) { return 8 + 29 * Math.sqrt(n / MAX_SUBS); }
+
+function buildWheelSvg() {
+  const cx = 320, cy = 320, r1 = 146, r2 = 232, hub = 122, GAP = 1.2;
+  const ang = wheelAngles();
+  let a = -90, orbits = '';
+  for (let i = 0; i < LAYERS.length; i++) {
+    const L = LAYERS[i];
+    const span = ang[i];
+    const a0 = a + GAP / 2, a1 = a + span - GAP / 2;
+    const mid = a + span / 2;
+    const cnt = polar(cx, cy, (r1 + r2) / 2, mid);
+    const R = bubRadius(L.nSubs);
+    const rb = r2 + 6 + R;
+    const bp = polar(cx, cy, rb, mid);
+    const s1 = polar(cx, cy, r2 - 5, mid);
+    const s2 = polar(cx, cy, rb - R + 4, mid);
+    orbits += '<g class="wheel-orbit" data-l="' + i + '" style="animation-delay:' + (i * 55) + 'ms">' +
+      '<path class="wheel-seg" data-l="' + i + '" d="' + annSector(cx, cy, r1, r2, a0, a1) +
+      '" style="fill:' + lcolor(i) + '"><title>لایه ' + fa(i + 1) + ' — ' + esc(LSHORT[i]) + ' · ' + fa(L.nSubs) + ' زیرمحور</title></path>' +
+      '<text class="wheel-cnt" x="' + cnt[0].toFixed(1) + '" y="' + cnt[1].toFixed(1) + '">' + fa(L.nSubs) + '</text>' +
+      '<line class="wheel-stem" x1="' + s1[0].toFixed(1) + '" y1="' + s1[1].toFixed(1) +
+      '" x2="' + s2[0].toFixed(1) + '" y2="' + s2[1].toFixed(1) + '" style="stroke:' + lcolor(i) + '"/>' +
+      '<g class="wheel-bub" data-l="' + i + '" role="button" tabindex="0" aria-label="لایه ' + fa(i + 1) + ': ' + esc(L.t) +
+      ' — ' + fa(L.nAxes) + ' محور و ' + fa(L.nSubs) + ' زیرمحور">' +
+        '<circle class="bub-body" cx="' + bp[0].toFixed(1) + '" cy="' + bp[1].toFixed(1) + '" r="' + R.toFixed(1) + '" style="fill:' + lcolor(i) + '"/>' +
+        '<text class="bub-num" x="' + bp[0].toFixed(1) + '" y="' + bp[1].toFixed(1) + '" style="font-size:' + Math.round(R * 0.62) + 'px">' + fa(i + 1) + '</text>' +
+      '</g></g>';
+    a += span;
+  }
+  return '<svg id="wheelSvg" viewBox="0 0 640 640" role="img" aria-label="چرخ ناوبری موزون ۱۲ لایه اطلس انرژی — گستره قطاع و اندازه حباب هر لایه متناسب با شمار زیرمحورهای آن است">' +
     '<defs><linearGradient id="wcGrad" x1="0" y1="0" x2="0" y2="1">' +
     '<stop offset="0" style="stop-color:var(--acc-2)"/><stop offset="1" style="stop-color:var(--acc)"/></linearGradient></defs>' +
-    '<circle cx="210" cy="210" r="205" fill="none" stroke="var(--wheel-track)" stroke-width="1.5"/>' +
-    segs + nums +
-    '<circle class="wheel-center-bg" cx="210" cy="210" r="102"/>' +
+    '<circle cx="320" cy="320" r="316" fill="none" stroke="var(--wheel-track)" stroke-width="1.5"/>' +
+    '<circle class="wheel-ring-anim" cx="320" cy="320" r="303" fill="none" stroke="var(--acc)" stroke-width="1.6" stroke-dasharray="3 14"/>' +
+    orbits +
+    '<circle class="wheel-center-bg" cx="320" cy="320" r="' + hub + '"/>' +
     '<g class="wheel-center">' +
-      '<text class="wc-big" id="wcBig" x="210" y="176">۱۲</text>' +
-      '<text class="wc-title" id="wcTitle" x="210" y="203">لایه موضوعی</text>' +
-      '<text class="wc-title" id="wcTitle2" x="210" y="222"></text>' +
-      '<line class="wc-line" x1="168" x2="252" y1="234" y2="234"/>' +
-      '<text class="wc-sub" id="wcSub" x="210" y="257">' + fa(T_AXES) + ' محور · ' + fa(T_SUBS) + ' زیرمحور</text>' +
+      '<text class="wc-big" id="wcBig" x="320" y="268">۱۲</text>' +
+      '<text class="wc-title" id="wcTitle" x="320" y="303">لایه موضوعی</text>' +
+      '<text class="wc-title" id="wcTitle2" x="320" y="333"></text>' +
+      '<line class="wc-line" x1="264" x2="376" y1="347" y2="347"/>' +
+      '<text class="wc-sub" id="wcSub" x="320" y="372">' + fa(T_AXES) + ' محور · ' + fa(T_SUBS) + ' زیرمحور</text>' +
     '</g></svg>';
 }
 
@@ -1088,17 +1125,29 @@ function wheelHover(i) {
   $('#wcBig').textContent = fa(i + 1);
   $('#wcTitle').textContent = parts[0];
   $('#wcTitle2').textContent = parts[1];
-  $('#wcSub').textContent = fa(LAYERS[i].nAxes) + ' محور · ' + fa(LAYERS[i].nSubs) + ' زیرمحور';
+  $('#wcSub').textContent = fa(LAYERS[i].nAxes) + ' محور · ' + fa(LAYERS[i].nSubs) + ' زیرمحور · ' + faNum(LAYERS[i].nSubs / T_SUBS * 100, 1) + '٪ از کل';
+}
+/* هم‌گام‌سازی هایلایت مدار چرخ و آیتم راهنما */
+function wheelHot(i, on) {
+  const g = document.querySelector('.wheel-orbit[data-l="' + i + '"]');
+  const leg = document.querySelector('.leg-item[data-l="' + i + '"]');
+  if (g) g.classList.toggle('hot', on);
+  if (leg) leg.classList.toggle('hot', on);
 }
 
 function buildLegend() {
   $('#wheelLegend').innerHTML = LAYERS.map(function (L) {
+    const share = L.nSubs / T_SUBS * 100;
     return '<button class="leg-item" data-l="' + L.i + '" style="--lc:' + lcolor(L.i) + '">' +
       '<span class="leg-dot" style="background:' + lcolor(L.i) + '">' + fa(L.i + 1) + '</span>' +
       '<span class="leg-body"><span class="leg-name">' + esc(L.t) + '</span>' +
-      '<span class="leg-meta"><span><b>' + fa(L.nAxes) + '</b> محور</span><span><b>' + fa(L.nSubs) + '</b> زیرمحور</span></span></span>' +
+      '<span class="leg-bar"><span class="leg-fill" data-w="' + (L.nSubs / MAX_SUBS * 100).toFixed(1) + '"></span></span>' +
+      '<span class="leg-meta"><span><b>' + fa(L.nAxes) + '</b> محور</span><span><b>' + fa(L.nSubs) + '</b> زیرمحور</span><span>سهم <b>' + faNum(share, 1) + '٪</b></span></span></span>' +
       '<span class="leg-arrow">' + ic('arrl', 15) + '</span></button>';
   }).join('');
+  requestAnimationFrame(function () { requestAnimationFrame(function () {
+    $$('#wheelLegend .leg-fill').forEach(function (f) { f.style.width = f.dataset.w + '%'; });
+  }); });
 }
 
 function bindHome() {
@@ -1112,27 +1161,21 @@ function bindHome() {
   const r = $('#ctaRandom');
   if (r) r.addEventListener('click', randomExplore);
 
-  $$('.wheel-seg').forEach(function (p) {
-    const i = +p.dataset.l;
-    p.addEventListener('mouseenter', function () { wheelHover(i); });
-    p.addEventListener('mouseleave', wheelDefault);
-    p.addEventListener('click', function () { go('#L' + (i + 1)); });
-    p.addEventListener('keydown', function (e) {
+  $$('.wheel-orbit').forEach(function (g) {
+    const i = +g.dataset.l;
+    g.addEventListener('mouseenter', function () { wheelHover(i); wheelHot(i, true); });
+    g.addEventListener('mouseleave', function () { wheelDefault(); wheelHot(i, false); });
+    g.addEventListener('click', function () { go('#L' + (i + 1)); });
+    const bub = g.querySelector('.wheel-bub');
+    if (bub) bub.addEventListener('keydown', function (e) {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go('#L' + (i + 1)); }
     });
   });
   $$('.leg-item').forEach(function (b) {
     const i = +b.dataset.l;
-    b.addEventListener('mouseenter', function () {
-      wheelHover(i);
-      const seg = document.querySelector('.wheel-seg[data-l="' + i + '"]');
-      if (seg) seg.classList.add('hot');
-    });
-    b.addEventListener('mouseleave', function () {
-      wheelDefault();
-      const seg = document.querySelector('.wheel-seg[data-l="' + i + '"]');
-      if (seg) seg.classList.remove('hot');
-    });
+    b.addEventListener('mouseenter', function () { wheelHover(i); wheelHot(i, true); });
+    b.addEventListener('mouseleave', function () { wheelDefault(); wheelHot(i, false); });
+    b.addEventListener('click', function () { go('#L' + (i + 1)); });
   });
 }
 
